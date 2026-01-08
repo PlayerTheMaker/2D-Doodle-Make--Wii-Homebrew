@@ -135,7 +135,7 @@ int main( int argc, char **argv ){
 	//tell wpad to output the IR data
 	WPAD_SetDataFormat(WPAD_CHAN_ALL, WPAD_FMT_BTNS_ACC_IR);
 
-	//un, random num generator init?
+	//random num generator init
 	srand(time(NULL));
 	
 	//add cursors
