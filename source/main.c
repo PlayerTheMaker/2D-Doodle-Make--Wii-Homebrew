@@ -34,6 +34,12 @@ typedef struct {
 }Cursor;
 
 typedef struct {
+	float x,y,vx,vy,rot,rotv,size;
+	Cursor* parent;
+	bool active;
+}Player;
+
+typedef struct {
 	int x,y,x2,y2;
 }Line;
 
@@ -42,6 +48,10 @@ GXTexObj texObj;
 #define TEXTURE_SIZE 64
 void drawSquareSprite(float tx, float ty, float tscale, float x, float y, float scale, float rot);
 void drawLine(float x, float y, float x2, float y2, float width, bool grey);
+bool lineCircleOverlap(float x, float y, float x2, float y2, float cx, float cy, float r);
+bool pointCircleOverlap(float x, float y, float cx, float cy, float r);
+bool pointLineOverlap(float x, float y, float x2, float y2, float px, float py);
+float distance(float x, float y, float x2, float y2);
 
 //---------------------------------------------------------------------------------
 int main( int argc, char **argv ){
@@ -138,19 +148,30 @@ int main( int argc, char **argv ){
 	//random num generator init
 	srand(time(NULL));
 	
-	//add cursors
+	//add cursors and players
 	Cursor cursors[4];
+	Player players[4];
 	Cursor defaultCursor = {.x=1000,.y=100,.free=true,.connected=false,.item=0,.lastX=0,.lastY=0};
+	Player defaultPlayer = {.x=200,.y=200, .vx = 0, .vy = 0, .rot = 0, .rotv = 0, .size = 1, .active = false};
 	for (int i=0; i<=3; i++){
-		
 		cursors[i] = defaultCursor;
+		players[i] = defaultPlayer;
+		players[i].parent = &cursors[i];
 	}
+
+	//world vars
+	float gravity = 0.1f;
+	bool screenWrap = false;
+	bool bottomAbyss = false;
 	
 	//object pools
 	int bgLineCount = 0;
 	Line bgLines[2500];
 	int lineCount = 0;
 	Line lines[2500];
+	//lineCount++;
+	//Line simpleLine = {.x = 10, .y = 10, .x2 = 100, .y2 = 100};
+	//lines[0] = simpleLine;
 
 	float placeholder = 0;
 
@@ -179,13 +200,22 @@ int main( int argc, char **argv ){
 		}
 		
 		
-		//cursor add elements
+		
 		for(int i=0; i<=3; i++){
+			//cursors
 			if(cursors[i].connected){
 				Cursor* currCursor = &cursors[i];
 				
+				//enable player
+				if(currCursor->pressedInputs & WPAD_BUTTON_PLUS){
+					players[i].active = true;
+					players[i].x = currCursor->x;
+					players[i].y = currCursor->y;
+				}
+
+				//cursor add elements
 				if(currCursor->pressedInputs & WPAD_BUTTON_A){
-					if(currCursor->item <= 1){
+					if(currCursor->item <= 1){//drawing
 						cursors[i].lastX = currCursor->x;
 						cursors[i].lastY = currCursor->y;
 					}else{
@@ -194,7 +224,7 @@ int main( int argc, char **argv ){
 				}
 				
 				if(currCursor->item <= 1 && currCursor->heldInputs & WPAD_BUTTON_A){
-					if(sqrtf(pow(currCursor->x - currCursor->lastX, 2)+pow(currCursor->y - currCursor->lastY, 2)) > 10){
+					if( !pointCircleOverlap(currCursor->x,currCursor->y,currCursor->lastX,currCursor->lastY,10)){
 						if(currCursor->item == 0 && lineCount < 2500){
 							lines[lineCount] = (Line){.x=currCursor->x,.y=currCursor->y,.x2=currCursor->lastX,.y2=currCursor->lastY};
 							lineCount++;
@@ -208,6 +238,39 @@ int main( int argc, char **argv ){
 					}
 				}
 				
+			}
+
+			//players
+			if(players[i].active){
+				if(cursors[i].connected){
+
+					Player* currPlayer = &players[i];
+
+					//grav
+					currPlayer->vy += gravity;
+
+					//apply velocity for target pos
+					int targetX = currPlayer->x + currPlayer->vx;
+					int targetY = currPlayer->y + currPlayer->vy;
+					
+					for(int j = 0; j < lineCount; j++){
+						if(lineCircleOverlap(
+							lines[j].x, lines[j].y, lines[j].x2, lines[j].y2,
+							currPlayer->x, currPlayer->y, currPlayer->size * 8
+						)){
+							currPlayer->rot = 
+							atan2f( (lines[j].y-lines[j].y2), (lines[j].x-lines[j].x2) );
+							targetY = currPlayer->y;
+							currPlayer->vy = 0;
+						}
+					}
+
+					currPlayer->x = targetX;
+					currPlayer->y = targetY;
+
+				}else{
+					players[i] = defaultPlayer;
+				}
 			}
 		}
 		
@@ -252,14 +315,21 @@ int main( int argc, char **argv ){
 			drawLine(line->x,line->y,line->x2,line->y2,3,false);
 		}
 		
-		//draw cursors and half-drawns
+		
 		for(int i=0; i<=3; i++){
+			//draw cursors and half-drawn lines
 			Cursor* currCursor = &cursors[i];
 			if (currCursor->connected){
 				if((currCursor->item <= 1) && (currCursor->heldInputs & WPAD_BUTTON_A)){
 					drawLine(currCursor->x,currCursor->y,currCursor->lastX,currCursor->lastY,3, currCursor->item == 1);
 				}
 				drawSquareSprite(i+0.025f,0.025f,0.95f, currCursor->x,currCursor->y,1.5f,0);
+			}
+
+			//draw players
+			Player* currPlayer = &players[i];
+			if (currPlayer->active){
+				drawSquareSprite(0, 2, 2, currPlayer->x,currPlayer->y,currPlayer->size,currPlayer->rot);
 			}
 		}
 		
@@ -337,4 +407,64 @@ void drawLine(float x, float y, float x2, float y2, float width, bool grey){
 		GX_Position2f32(x-xOff,y-yOff);			// Bottom Left
 		GX_TexCoord2f32(tleft,ttop+tlength);
 	GX_End();									// Done Drawing The Quad
+}
+
+bool lineCircleOverlap(float x, float y, float x2, float y2, float cx, float cy, float r){
+	
+	if(
+		pointCircleOverlap(x, y, cx, cy, r) ||
+		pointCircleOverlap(x2, y2, cx, cy, r)
+	){
+		return true;
+	}
+
+	float distX = x - x2;
+	float distY = y - y2;
+	float len = sqrt( (distX*distX) + (distY*distY) );
+
+	//I don't get this dot product stuff
+	//just took it from https://www.jeffreythompson.org/collision-detection/line-circle.php lol
+	//like, how do multiplied vectors help us find the closest point? and why divide by len^2?
+	float dot = ( ((cx-x)*(x2-x)) + ((cy-y)*(y2-y)) ) / pow(len,2);
+
+	float closestX = x + (dot * (x2-x));
+	float closestY = y + (dot * (y2-y));
+
+	bool onSegment = pointLineOverlap(x,y,x2,y2, closestX,closestY);
+	if (!onSegment) return false;
+
+	distX = closestX - cx;
+	distY = closestY - cy;
+	float distance = sqrt( (distX*distX) + (distY*distY) );
+	if(distance < r){
+		return true;
+	}
+	return false;
+}
+
+bool pointCircleOverlap(float x, float y, float cx, float cy, float r){
+	if(distance(x,y,cx,cy) < r){
+		return true;
+	}
+	return false;
+}
+
+bool pointLineOverlap(float x, float y, float x2, float y2, float px, float py) {
+
+  //distance
+  float distance1 = distance(px,py, x,y);
+  float distance2 = distance(px,py, x,y);
+
+  float lineLen = distance(x,y, x2,y2);
+
+  float buffer = 10; 
+  //if distances to points roughly equal line length
+  if (distance1+distance2 >= lineLen-buffer && distance1+distance2 <= lineLen+buffer) {
+    return true;
+  }
+  return false;
+}
+
+float distance(float x, float y, float x2, float y2){
+	return sqrtf( (x-x2)*(x-x2) + (y-y2)*(y-y2));
 }
