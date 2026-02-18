@@ -34,9 +34,9 @@ typedef struct {
 }Cursor;
 
 typedef struct {
-	float x,y,vx,vy,rot,rotv,size;
+	double x,y,vx,vy,rot,rotv,size;
 	Cursor* parent;
-	bool active;
+	bool active, grounded;
 }Player;
 
 typedef struct {
@@ -46,12 +46,12 @@ typedef struct {
 GXTexObj texObj;
 
 #define TEXTURE_SIZE 64
-void drawSquareSprite(float tx, float ty, float tscale, float x, float y, float scale, float rot);
-void drawLine(float x, float y, float x2, float y2, float width, bool grey);
-bool lineCircleOverlap(float x, float y, float x2, float y2, float cx, float cy, float r);
-bool pointCircleOverlap(float x, float y, float cx, float cy, float r);
-bool pointLineOverlap(float x, float y, float x2, float y2, float px, float py);
-float distance(float x, float y, float x2, float y2);
+void drawSquareSprite(double tx, double ty, double tscale, double x, double y, double scale, double rot);
+void drawLine(double x, double y, double x2, double y2, double width, bool grey);
+bool lineCircleOverlap(double x, double y, double x2, double y2, double cx, double cy, double r);
+bool pointCircleOverlap(double x, double y, double cx, double cy, double r);
+bool pointLineOverlap(double x, double y, double x2, double y2, double px, double py);
+double distance(double x, double y, double x2, double y2);
 
 //---------------------------------------------------------------------------------
 int main( int argc, char **argv ){
@@ -152,7 +152,7 @@ int main( int argc, char **argv ){
 	Cursor cursors[4];
 	Player players[4];
 	Cursor defaultCursor = {.x=1000,.y=100,.free=true,.connected=false,.item=0,.lastX=0,.lastY=0};
-	Player defaultPlayer = {.x=200,.y=200, .vx = 0, .vy = 0, .rot = 0, .rotv = 0, .size = 1, .active = false};
+	Player defaultPlayer = {.x=200,.y=200, .vx = 0, .vy = 0, .rot = 0, .rotv = 0, .size = 1, .active = false, .grounded = false};
 	for (int i=0; i<=3; i++){
 		cursors[i] = defaultCursor;
 		players[i] = defaultPlayer;
@@ -160,7 +160,7 @@ int main( int argc, char **argv ){
 	}
 
 	//world vars
-	float gravity = 0.1f;
+	double gravity = 0.1;
 	bool screenWrap = false;
 	bool bottomAbyss = false;
 	
@@ -173,7 +173,7 @@ int main( int argc, char **argv ){
 	//Line simpleLine = {.x = 10, .y = 10, .x2 = 100, .y2 = 100};
 	//lines[0] = simpleLine;
 
-	float placeholder = 0;
+	double placeholder = 0;
 
 	while(1) {
 		
@@ -224,6 +224,7 @@ int main( int argc, char **argv ){
 				}
 				
 				if(currCursor->item <= 1 && currCursor->heldInputs & WPAD_BUTTON_A){
+					//add line
 					if( !pointCircleOverlap(currCursor->x,currCursor->y,currCursor->lastX,currCursor->lastY,10)){
 						if(currCursor->item == 0 && lineCount < 2500){
 							lines[lineCount] = (Line){.x=currCursor->x,.y=currCursor->y,.x2=currCursor->lastX,.y2=currCursor->lastY};
@@ -249,24 +250,100 @@ int main( int argc, char **argv ){
 					//grav
 					currPlayer->vy += gravity;
 
+					if(currPlayer->grounded){
+						if(cursors[i].heldInputs & WPAD_BUTTON_RIGHT){
+							currPlayer->vx += cos(currPlayer->rot) * .5;
+							currPlayer->vy += sin(currPlayer->rot) * .5;
+						}
+						if(cursors[i].heldInputs & WPAD_BUTTON_LEFT){
+							currPlayer->vx -= cos(currPlayer->rot) * .5;
+							currPlayer->vy -= sin(currPlayer->rot) * .5;
+						}
+						if(cursors[i].heldInputs & WPAD_BUTTON_UP){
+							currPlayer->vx += cos(currPlayer->rot - M_PI/2);
+							currPlayer->vy += sin(currPlayer->rot - M_PI/2);
+						}
+					}else{
+						if(cursors[i].heldInputs & WPAD_BUTTON_RIGHT){
+							currPlayer->rot += 0.15;
+							currPlayer->vx += 0.1;
+						}
+						if(cursors[i].heldInputs & WPAD_BUTTON_LEFT){
+							currPlayer->rot -= 0.15;
+							currPlayer->vx -= 0.1;
+						}
+					}
+
+					while(currPlayer->rot > M_PI){
+						currPlayer->rot -= 2*M_PI;
+					}
+					while(currPlayer->rot < -M_PI){
+						currPlayer->rot += 2*M_PI;
+					}
+					
+
 					//apply velocity for target pos
 					int targetX = currPlayer->x + currPlayer->vx;
 					int targetY = currPlayer->y + currPlayer->vy;
 					
+					currPlayer->grounded = false;
 					for(int j = 0; j < lineCount; j++){
-						if(lineCircleOverlap(
+						
+						//general area check
+						if(
+							lineCircleOverlap(
 							lines[j].x, lines[j].y, lines[j].x2, lines[j].y2,
-							currPlayer->x, currPlayer->y, currPlayer->size * 8
-						)){
-							currPlayer->rot = 
-							atan2f( (lines[j].y-lines[j].y2), (lines[j].x-lines[j].x2) );
-							targetY = currPlayer->y;
-							currPlayer->vy = 0;
+							targetX, targetY, currPlayer->size * 8 * 2)
+						){
+							double groundAngle = 
+								atan2f( (lines[j].y-lines[j].y2), (lines[j].x-lines[j].x2) );
+
+
+							if( abs(currPlayer->rot - groundAngle) < M_PI){
+								currPlayer->grounded = true;
+								currPlayer->rot = groundAngle;
+							}
+
+							//collision loop
+							int loopCount = 0;
+							while(
+								lineCircleOverlap(
+							lines[j].x, lines[j].y, lines[j].x2, lines[j].y2,
+							targetX, targetY, currPlayer->size * 8)
+							){
+								targetX = currPlayer->x - currPlayer->vx;
+								targetY = currPlayer->y - currPlayer->vy;
+								currPlayer->vx += cos(groundAngle - M_PI/2) * .1;
+								currPlayer->vy += sin(groundAngle - M_PI/2) * .1;
+								targetX = currPlayer->x + currPlayer->vx;
+								targetY = currPlayer->y + currPlayer->vy;
+								
+								loopCount += 1;
+								if(loopCount > 100){
+									targetX = currPlayer->x;
+									targetY = currPlayer->y;
+									currPlayer->vx = 0;
+									currPlayer->vy = 0;
+									break;
+								}
+							}
+
+							//targetX -= currPlayer->vx * .1;
+							//targetY -= currPlayer->vy * .1;
 						}
 					}
 
 					currPlayer->x = targetX;
 					currPlayer->y = targetY;
+
+					//friction
+					currPlayer->vx *= .99;
+					currPlayer->vy *= .99;
+					if(currPlayer->grounded){
+						currPlayer->vx *= .975;
+						currPlayer->vy *= .975;
+					}
+					
 
 				}else{
 					players[i] = defaultPlayer;
@@ -323,7 +400,7 @@ int main( int argc, char **argv ){
 				if((currCursor->item <= 1) && (currCursor->heldInputs & WPAD_BUTTON_A)){
 					drawLine(currCursor->x,currCursor->y,currCursor->lastX,currCursor->lastY,3, currCursor->item == 1);
 				}
-				drawSquareSprite(i+0.025f,0.025f,0.95f, currCursor->x,currCursor->y,1.5f,0);
+				drawSquareSprite(i+0.025f,0.025f,0.95f, currCursor->x,currCursor->y+10,1.5f,0);
 			}
 
 			//draw players
@@ -334,7 +411,7 @@ int main( int argc, char **argv ){
 		}
 		
 		//to make line count progress bar
-		drawLine(0, 0, ((float)lineCount/2500)*640, 0, 10, true);
+		drawLine(0, 0, ((double)lineCount/2500)*640, 0, 10, true);
 			
 		GX_DrawDone();
 		
@@ -358,13 +435,13 @@ int main( int argc, char **argv ){
 }
 
 //---------------------------------------------------------------------------------
-void drawSquareSprite(float tx, float ty, float tscale, float x, float y, float scale, float rot) {
+void drawSquareSprite(double tx, double ty, double tscale, double x, double y, double scale, double rot) {
 //---------------------------------------------------------------------------------
 	
-	float tleft = (tx*16)/TEXTURE_SIZE;
-	float ttop = (ty*16)/TEXTURE_SIZE;
-	float tlength = (tscale*16)/TEXTURE_SIZE;
-	float drawscale = tscale*16*scale*0.5;
+	double tleft = (tx*16)/TEXTURE_SIZE;
+	double ttop = (ty*16)/TEXTURE_SIZE;
+	double tlength = (tscale*16)/TEXTURE_SIZE;
+	double drawscale = tscale*16*scale*0.5;
 	
 	GX_Begin(GX_QUADS, GX_VTXFMT0, 4);			// Draw A Quad
 		GX_Position2f32(x-cos(rot+M_PI/4)*drawscale, y-sin(rot+M_PI/4)*drawscale);			// Top Left
@@ -380,22 +457,22 @@ void drawSquareSprite(float tx, float ty, float tscale, float x, float y, float 
 }
 
 
-void drawLine(float x, float y, float x2, float y2, float width, bool grey){
+void drawLine(double x, double y, double x2, double y2, double width, bool grey){
 	
-	float perpendicular = atan2f(y2-y,x2-x)-0.5f*(float)M_PI;
+	double perpendicular = atan2f(y2-y,x2-x)-0.5f*(double)M_PI;
 	
-	float xOff = cosf(perpendicular)*width*.5f;
-	float yOff = sinf(perpendicular)*width*.5f;
+	double xOff = cos(perpendicular)*width*.5;
+	double yOff = sin(perpendicular)*width*.5;
 	
-	float greyOff = 0;
+	double greyOff = 0;
 	if(grey) greyOff = 1;
 	
 	//printf("\33[2K\r");
 	//printf("%f",xOff);
 	
-	float tleft = (1.1f*16+greyOff*16)/TEXTURE_SIZE;
-	float ttop = (1.1f*16)/TEXTURE_SIZE;
-	float tlength = (.1f*16)/TEXTURE_SIZE;
+	double tleft = (1.1f*16+greyOff*16)/TEXTURE_SIZE;
+	double ttop = (1.1f*16)/TEXTURE_SIZE;
+	double tlength = (.1f*16)/TEXTURE_SIZE;
 	
 	GX_Begin(GX_QUADS, GX_VTXFMT0, 4);			// Draw A Quad
 		GX_Position2f32(x+xOff, y+yOff);					// Top Left
@@ -409,7 +486,7 @@ void drawLine(float x, float y, float x2, float y2, float width, bool grey){
 	GX_End();									// Done Drawing The Quad
 }
 
-bool lineCircleOverlap(float x, float y, float x2, float y2, float cx, float cy, float r){
+bool lineCircleOverlap(double x, double y, double x2, double y2, double cx, double cy, double r){
 	
 	if(
 		pointCircleOverlap(x, y, cx, cy, r) ||
@@ -418,46 +495,46 @@ bool lineCircleOverlap(float x, float y, float x2, float y2, float cx, float cy,
 		return true;
 	}
 
-	float distX = x - x2;
-	float distY = y - y2;
-	float len = sqrt( (distX*distX) + (distY*distY) );
+	double distX = x - x2;
+	double distY = y - y2;
+	double len = sqrt( (distX*distX) + (distY*distY) );
 
 	//I don't get this dot product stuff
 	//just took it from https://www.jeffreythompson.org/collision-detection/line-circle.php lol
 	//like, how do multiplied vectors help us find the closest point? and why divide by len^2?
-	float dot = ( ((cx-x)*(x2-x)) + ((cy-y)*(y2-y)) ) / pow(len,2);
+	double dot = ( ((cx-x)*(x2-x)) + ((cy-y)*(y2-y)) ) / pow(len,2);
 
-	float closestX = x + (dot * (x2-x));
-	float closestY = y + (dot * (y2-y));
+	double closestX = x + (dot * (x2-x));
+	double closestY = y + (dot * (y2-y));
 
 	bool onSegment = pointLineOverlap(x,y,x2,y2, closestX,closestY);
 	if (!onSegment) return false;
 
 	distX = closestX - cx;
 	distY = closestY - cy;
-	float distance = sqrt( (distX*distX) + (distY*distY) );
+	double distance = sqrt( (distX*distX) + (distY*distY) );
 	if(distance < r){
 		return true;
 	}
 	return false;
 }
 
-bool pointCircleOverlap(float x, float y, float cx, float cy, float r){
+bool pointCircleOverlap(double x, double y, double cx, double cy, double r){
 	if(distance(x,y,cx,cy) < r){
 		return true;
 	}
 	return false;
 }
 
-bool pointLineOverlap(float x, float y, float x2, float y2, float px, float py) {
+bool pointLineOverlap(double x, double y, double x2, double y2, double px, double py) {
 
   //distance
-  float distance1 = distance(px,py, x,y);
-  float distance2 = distance(px,py, x,y);
+  double distance1 = distance(px,py, x,y);
+  double distance2 = distance(px,py, x,y);
 
-  float lineLen = distance(x,y, x2,y2);
+  double lineLen = distance(x,y, x2,y2);
 
-  float buffer = 10; 
+  double buffer = 10; 
   //if distances to points roughly equal line length
   if (distance1+distance2 >= lineLen-buffer && distance1+distance2 <= lineLen+buffer) {
     return true;
@@ -465,6 +542,6 @@ bool pointLineOverlap(float x, float y, float x2, float y2, float px, float py) 
   return false;
 }
 
-float distance(float x, float y, float x2, float y2){
+double distance(double x, double y, double x2, double y2){
 	return sqrtf( (x-x2)*(x-x2) + (y-y2)*(y-y2));
 }
