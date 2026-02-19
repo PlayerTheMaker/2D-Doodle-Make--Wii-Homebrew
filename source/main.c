@@ -45,7 +45,7 @@ typedef struct {
 
 GXTexObj texObj;
 
-#define TEXTURE_SIZE 64
+#define TEXTURE_SIZE 128
 void drawSquareSprite(double tx, double ty, double tscale, double x, double y, double scale, double rot);
 void drawLine(double x, double y, double x2, double y2, double width, bool grey);
 bool lineCircleOverlap(double x, double y, double x2, double y2, double cx, double cy, double r);
@@ -173,10 +173,15 @@ int main( int argc, char **argv ){
 	//Line simpleLine = {.x = 10, .y = 10, .x2 = 100, .y2 = 100};
 	//lines[0] = simpleLine;
 
-	double placeholder = 0;
+	int frameLooper = -1;
 
 	while(1) {
 		
+		frameLooper++;
+		if(frameLooper > 30){
+			frameLooper = 0;
+		}
+
 		//GAME CALCULATIONS
 		WPAD_ScanPads();
 
@@ -199,8 +204,7 @@ int main( int argc, char **argv ){
 			}
 		}
 		
-		
-		
+		//act on cursor inputs
 		for(int i=0; i<=3; i++){
 			//cursors
 			if(cursors[i].connected){
@@ -423,12 +427,20 @@ int main( int argc, char **argv ){
 			//draw players
 			Player* currPlayer = &players[i];
 			if (currPlayer->active){
-				drawSquareSprite(0, 2, 2, currPlayer->x,currPlayer->y,currPlayer->size,currPlayer->rot);
+				int frameOff = 0;
+
+				if((currCursor->heldInputs & WPAD_BUTTON_RIGHT) || (currCursor->heldInputs & WPAD_BUTTON_LEFT)){
+					if(frameLooper > 7 && frameLooper < 15 || frameLooper > 22){
+						frameOff = 2;
+					}
+				}
+
+				drawSquareSprite(4.1+frameOff, 0.1+i*2, 1.875, currPlayer->x,currPlayer->y,currPlayer->size,currPlayer->rot);
 			}
 		}
 		
-		//to make line count progress bar
-		//drawLine(0, 0, ((double)lineCount/2500)*640, 0, 10, true);
+		//the value bar (cause I can't get printf to work without inducing seziures)
+		drawLine(0, 0, frameLooper*3, 0, 10, true);
 			
 		GX_DrawDone();
 		
