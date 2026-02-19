@@ -165,6 +165,10 @@ int main( int argc, char **argv ){
 	float turnPower = 0.1;
 	float jumpPower = 1;
 	float airMovePower = 0.1;
+
+	float airFriction = .99;
+	float groundFriction = .965;
+	float surfaceAdherence = 0.5;
 	
 	bool screenWrap = false;
 	bool bottomAbyss = false;
@@ -291,6 +295,7 @@ int main( int argc, char **argv ){
 					//grav
 					currPlayer->vy += gravity;
 
+					//move
 					if(currPlayer->grounded){
 						if(cursors[i].heldInputs & WPAD_BUTTON_RIGHT){
 							currPlayer->vx += cosf(currPlayer->rot) * movePower;
@@ -300,10 +305,12 @@ int main( int argc, char **argv ){
 							currPlayer->vx -= cosf(currPlayer->rot) * movePower;
 							currPlayer->vy -= sinf(currPlayer->rot) * movePower;
 						}
+						//jump
 						if(cursors[i].heldInputs & WPAD_BUTTON_UP){
 							currPlayer->vx += cosf(currPlayer->rot - M_PI/2) * jumpPower;
 							currPlayer->vy += sinf(currPlayer->rot - M_PI/2) * jumpPower;
 						}
+					//rotate
 					}else{
 						if(cursors[i].heldInputs & WPAD_BUTTON_RIGHT){
 							currPlayer->rot += turnPower;
@@ -345,6 +352,8 @@ int main( int argc, char **argv ){
 								currPlayer->rot = groundAngle;
 							}
 
+							float groundPerpendicular = groundAngle - M_PI/2;
+
 							//collision loop
 							int loopCount = 0;
 							while(
@@ -354,8 +363,8 @@ int main( int argc, char **argv ){
 							){
 								targetX = currPlayer->x - currPlayer->vx;
 								targetY = currPlayer->y - currPlayer->vy;
-								currPlayer->vx += cosf(groundAngle - M_PI/2) * .1;
-								currPlayer->vy += sinf(groundAngle - M_PI/2) * .1;
+								currPlayer->vx += cosf(groundPerpendicular) * .1;
+								currPlayer->vy += sinf(groundPerpendicular) * .1;
 								targetX = currPlayer->x + currPlayer->vx;
 								targetY = currPlayer->y + currPlayer->vy;
 								
@@ -369,8 +378,11 @@ int main( int argc, char **argv ){
 								}
 							}
 
-							//targetX -= currPlayer->vx * .1;
-							//targetY -= currPlayer->vy * .1;
+							if(cursors[i].heldInputs & WPAD_BUTTON_UP == false){
+								currPlayer->vx -= cosf(groundPerpendicular)*surfaceAdherence;
+								currPlayer->vy -= sinf(groundPerpendicular)*surfaceAdherence;
+							}
+							
 						}
 					}
 
@@ -378,11 +390,11 @@ int main( int argc, char **argv ){
 					currPlayer->y = targetY;
 
 					//friction
-					currPlayer->vx *= .99;
-					currPlayer->vy *= .99;
+					currPlayer->vx *= airFriction;
+					currPlayer->vy *= airFriction;
 					if(currPlayer->grounded){
-						currPlayer->vx *= .975;
-						currPlayer->vy *= .975;
+						currPlayer->vx *= groundFriction;
+						currPlayer->vy *= groundFriction;
 					}
 					
 
