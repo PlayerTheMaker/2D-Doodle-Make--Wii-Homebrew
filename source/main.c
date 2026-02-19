@@ -52,6 +52,7 @@ bool lineCircleOverlap(float x, float y, float x2, float y2, float cx, float cy,
 bool pointCircleOverlap(float x, float y, float cx, float cy, float r);
 bool pointLineOverlap(float x, float y, float x2, float y2, float px, float py);
 float distance(float x, float y, float x2, float y2);
+int sideOfLine(float x, float y, float x2,float y2, float px, float py);
 
 //---------------------------------------------------------------------------------
 int main( int argc, char **argv ){
@@ -346,6 +347,10 @@ int main( int argc, char **argv ){
 							float groundAngle = 
 								atan2f( (lines[j].y-lines[j].y2), (lines[j].x-lines[j].x2) );
 
+							if(sideOfLine(lines[j].x,lines[j].y,lines[j].x2,lines[j].y2,currPlayer->x,currPlayer->y) > 0){
+								groundAngle = atan2f( (lines[j].y2-lines[j].y), (lines[j].x2-lines[j].x) );
+							}
+
 
 							if( abs(currPlayer->rot - groundAngle) < M_PI/3){
 								currPlayer->grounded = true;
@@ -613,4 +618,12 @@ bool pointLineOverlap(float x, float y, float x2, float y2, float px, float py) 
 
 float distance(float x, float y, float x2, float y2){
 	return sqrtf( (x-x2)*(x-x2) + (y-y2)*(y-y2));
+}
+
+int sideOfLine(float x, float y, float x2,float y2, float px, float py) {
+  if( (x2 - x)*(py - y) - (y2 - y)*(px - x) > 0){
+	return -1;
+  }else{
+	return 1;
+  }
 }
