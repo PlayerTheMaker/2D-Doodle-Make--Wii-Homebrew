@@ -226,12 +226,28 @@ int main( int argc, char **argv ){
 				if(currCursor->item <= 1 && currCursor->heldInputs & WPAD_BUTTON_A){
 					//add line
 					if( !pointCircleOverlap(currCursor->x,currCursor->y,currCursor->lastX,currCursor->lastY,10)){
+
+						int x = currCursor->x;
+						int y = currCursor->y;
+						int x2 = currCursor->lastX;
+						int y2 = currCursor->lastY;
+
+						//make sure lines are always go from left to right
+						if(x < x2){
+							int store = x;
+							x = x2;
+							x2 = store;
+							store = y;
+							y = y2;
+							y2 = store;
+						}
+
 						if(currCursor->item == 0 && lineCount < 2500){
-							lines[lineCount] = (Line){.x=currCursor->x,.y=currCursor->y,.x2=currCursor->lastX,.y2=currCursor->lastY};
+							lines[lineCount] = (Line){.x=x,.y=y,.x2=x2,.y2=y2};
 							lineCount++;
 						}
 						if(currCursor->item == 1 && bgLineCount < 2500){
-							bgLines[bgLineCount] = (Line){.x=currCursor->x,.y=currCursor->y,.x2=currCursor->lastX,.y2=currCursor->lastY};
+							bgLines[bgLineCount] = (Line){.x=x,.y=y,.x2=x2,.y2=y2};
 							bgLineCount++;
 						}
 						cursors[i].lastX = currCursor->x;
