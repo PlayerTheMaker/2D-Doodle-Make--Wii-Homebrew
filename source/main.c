@@ -188,8 +188,8 @@ int main( int argc, char **argv ){
 		for(int i=0; i<=3; i++){
 			WPADData* data = WPAD_Data(i);
 			if(data->data_present){
-				cursors[i].x = data->ir.x;
-				cursors[i].y = data->ir.y;
+				cursors[i].x = (int)(data->ir.x*1.135);
+				cursors[i].y = (int)(data->ir.y*1.135);
 				cursors[i].connected = true;
 				cursors[i].pressedInputs = WPAD_ButtonsDown(i);
 				cursors[i].heldInputs = WPAD_ButtonsHeld(i);
@@ -379,6 +379,7 @@ int main( int argc, char **argv ){
 		*/
 		//printf("\33[2K\r");
 		//printf("%d, %f",lineCount,lines[0].x2);
+		
 		
 		GX_SetViewport(0,0,rmode->fbWidth,rmode->efbHeight,0,1);
 		GX_InvVtxCache();
