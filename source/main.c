@@ -171,8 +171,12 @@ int main( int argc, char **argv ){
 	float groundFriction = .965;
 	float surfaceAdherence = 0.5;
 	
-	bool screenWrap = false;
-	bool bottomAbyss = false;
+
+	int arenaHorzSize = 600;
+	int arenaVertSize = 400;
+
+	bool screenWrap = true;
+	bool bottomAbyss = true;
 	
 	//object pools
 	int bgLineCount = 0;
@@ -227,6 +231,11 @@ int main( int argc, char **argv ){
 					players[i].active = true;
 					players[i].x = currCursor->x;
 					players[i].y = currCursor->y;
+				}
+
+				//disable player
+				if(currCursor->pressedInputs & WPAD_BUTTON_MINUS){
+					players[i].active = false;
 				}
 
 				//cursor add elements
@@ -323,11 +332,48 @@ int main( int argc, char **argv ){
 						}
 					}
 
+					//prevent rotation value from wrapping around to keep things simple
 					while(currPlayer->rot > M_PI){
 						currPlayer->rot -= 2*M_PI;
 					}
 					while(currPlayer->rot < -M_PI){
 						currPlayer->rot += 2*M_PI;
+					}
+
+					//bottom abyss
+					if(bottomAbyss){
+						if(currPlayer->y >= arenaVertSize){
+							players[i].active = false;
+						}
+					}
+
+					//screen wrap
+					if(screenWrap){
+						if(currPlayer->x < 0){
+							currPlayer->x = arenaHorzSize;
+						}
+						if(currPlayer->x > arenaHorzSize){
+							currPlayer->x = 0;
+						}
+						if(currPlayer->y < 0){
+							currPlayer->y = arenaVertSize;
+						}
+						if(currPlayer->y > arenaVertSize){
+							currPlayer->y = 0;
+						}
+					}else{//boundaries
+						if(currPlayer->x < 0){
+							currPlayer->x = 0;
+						}
+						if(currPlayer->x > arenaHorzSize){
+							currPlayer->x = arenaHorzSize;
+						}
+						if(currPlayer->y < 0){
+							currPlayer->y = 0;
+						}
+						if(currPlayer->y > arenaVertSize){
+							currPlayer->y = arenaVertSize;
+						}
 					}
 					
 
@@ -383,7 +429,7 @@ int main( int argc, char **argv ){
 								}
 							}
 
-							if(cursors[i].heldInputs & WPAD_BUTTON_UP == false){
+							if((cursors[i].heldInputs & WPAD_BUTTON_UP) == false){
 								currPlayer->vx -= cosf(groundPerpendicular)*surfaceAdherence;
 								currPlayer->vy -= sinf(groundPerpendicular)*surfaceAdherence;
 							}
@@ -474,7 +520,7 @@ int main( int argc, char **argv ){
 				int frameOff = 0;
 
 				if((currCursor->heldInputs & WPAD_BUTTON_RIGHT) || (currCursor->heldInputs & WPAD_BUTTON_LEFT)){
-					if(frameLooper > 7 && frameLooper < 15 || frameLooper > 22){
+					if((frameLooper > 7 && frameLooper < 15) || frameLooper > 22){
 						frameOff = 2;
 					}
 				}
@@ -621,7 +667,7 @@ float distance(float x, float y, float x2, float y2){
 }
 
 int sideOfLine(float x, float y, float x2,float y2, float px, float py) {
-  if( (x2 - x)*(py - y) - (y2 - y)*(px - x) > 0){
+  if( (x2 - x)*(py - y) - (y2 - y)*(px - x) > 0){//apparently this is a corss product
 	return -1;
   }else{
 	return 1;
