@@ -46,7 +46,7 @@ typedef struct {
 GXTexObj texObj;
 
 #define TEXTURE_SIZE 128
-void drawSquareSprite(float tx, float ty, float tscale, float x, float y, float scale, float rot);
+void drawSquareSprite(float tx, float ty, float tscale, float x, float y, float scale, float rot, bool flip);
 void drawLine(float x, float y, float x2, float y2, float width, bool grey);
 bool lineCircleOverlap(float x, float y, float x2, float y2, float cx, float cy, float r);
 bool pointCircleOverlap(float x, float y, float cx, float cy, float r);
@@ -233,7 +233,21 @@ int main( int argc, char **argv ){
 						
 					}
 				}
+
+				//erase
+				if(currCursor->heldInputs & WPAD_BUTTON_B){
+					for(int j = 0; j < lineCount; j++){
+						Line* currLine = &lines[j];
+						if(lineCircleOverlap(currLine->x,currLine->y,currLine->x2,currLine->y2,currCursor->x,currCursor->y,2)  ){
+							for(int k = j+1; k < lineCount; k++){
+								lines[k-1] = lines[k];
+							}
+							lineCount--;
+						}
+					}
+				}
 				
+				//line drag
 				if(currCursor->item <= 1 && currCursor->heldInputs & WPAD_BUTTON_A){
 					//add line
 					if( !pointCircleOverlap(currCursor->x,currCursor->y,currCursor->lastX,currCursor->lastY,10)){
@@ -405,7 +419,7 @@ int main( int argc, char **argv ){
 		GX_LoadPosMtxImm(GXmodelView2D,GX_PNMTX0);
 		
 		//background giant sprite
-		drawSquareSprite(0,1,1, 320,240,100,0);
+		drawSquareSprite(0,1,1, 320,240,100,0, false);
 		
 		//time to actually draw the game!
 		
@@ -428,7 +442,13 @@ int main( int argc, char **argv ){
 				if((currCursor->item <= 1) && (currCursor->heldInputs & WPAD_BUTTON_A)){
 					drawLine(currCursor->x,currCursor->y,currCursor->lastX,currCursor->lastY,3, currCursor->item == 1);
 				}
-				drawSquareSprite(i+0.025f,0.025f,0.95f, currCursor->x,currCursor->y+10,1.5f,0);
+				drawSquareSprite(i+0.025f,0.025f,0.95f, currCursor->x,currCursor->y+10,1.5f,0, false);
+
+				//erase icon
+				if((currCursor->heldInputs & WPAD_BUTTON_B) || (currCursor->heldInputs & WPAD_BUTTON_A && currCursor->item == 2)){
+					drawSquareSprite(0.05,2.05,0.9, currCursor->x+10,currCursor->y,1,0, false);
+				}
+
 			}
 
 			//draw players
@@ -442,7 +462,7 @@ int main( int argc, char **argv ){
 					}
 				}
 
-				drawSquareSprite(4.1+frameOff, 0.1+i*2, 1.875, currPlayer->x,currPlayer->y,currPlayer->size,currPlayer->rot);
+				drawSquareSprite(4.1+frameOff, 0.1+i*2, 1.875, currPlayer->x,currPlayer->y,currPlayer->size,currPlayer->rot, false);
 			}
 		}
 		
@@ -471,22 +491,27 @@ int main( int argc, char **argv ){
 }
 
 //---------------------------------------------------------------------------------
-void drawSquareSprite(float tx, float ty, float tscale, float x, float y, float scale, float rot) {
+void drawSquareSprite(float tx, float ty, float tscale, float x, float y, float scale, float rot, bool flip) {
 //---------------------------------------------------------------------------------
 	
+	float flipVal = 1;
+	if(flip){
+		flipVal = -1;
+	}
+
 	float tleft = (tx*16)/TEXTURE_SIZE;
 	float ttop = (ty*16)/TEXTURE_SIZE;
 	float tlength = (tscale*16)/TEXTURE_SIZE;
 	float drawscale = tscale*16*scale*0.5;
 	
 	GX_Begin(GX_QUADS, GX_VTXFMT0, 4);			// Draw A Quad
-		GX_Position2f32(x-cosf(rot+M_PI/4)*drawscale, y-sinf(rot+M_PI/4)*drawscale);			// Top Left
+		GX_Position2f32(x-cosf(rot+M_PI/4)*drawscale*flipVal, y-sinf(rot+M_PI/4)*drawscale);			// Top Left
 		GX_TexCoord2f32(tleft,ttop);
-		GX_Position2f32(x-cosf(rot+3*(M_PI/4))*drawscale, y-sinf(rot+3*(M_PI/4))*drawscale);	// Top Right
+		GX_Position2f32(x-cosf(rot+3*(M_PI/4))*drawscale*flipVal, y-sinf(rot+3*(M_PI/4))*drawscale);	// Top Right
 		GX_TexCoord2f32(tleft+tlength,ttop);
-		GX_Position2f32(x-cosf(rot+5*(M_PI/4))*drawscale, y-sinf(rot+5*(M_PI/4))*drawscale);	// Bottom Right
+		GX_Position2f32(x-cosf(rot+5*(M_PI/4))*drawscale*flipVal, y-sinf(rot+5*(M_PI/4))*drawscale);	// Bottom Right
 		GX_TexCoord2f32(tleft+tlength,ttop+tlength);
-		GX_Position2f32(x-cosf(rot-M_PI/4)*drawscale, y-sinf(rot-M_PI/4)*drawscale);			// Bottom Left
+		GX_Position2f32(x-cosf(rot-M_PI/4)*drawscale*flipVal, y-sinf(rot-M_PI/4)*drawscale);			// Bottom Left
 		GX_TexCoord2f32(tleft,ttop+tlength);
 	GX_End();									// Done Drawing The Quad
 
@@ -531,9 +556,7 @@ bool lineCircleOverlap(float x, float y, float x2, float y2, float cx, float cy,
 		return true;
 	}
 
-	float distX = x - x2;
-	float distY = y - y2;
-	float len = sqrt( (distX*distX) + (distY*distY) );
+	float len = distance(x,y,x2,y2);
 
 	//I don't get this dot product stuff
 	//just took it from https://www.jeffreythompson.org/collision-detection/line-circle.php lol
@@ -546,17 +569,15 @@ bool lineCircleOverlap(float x, float y, float x2, float y2, float cx, float cy,
 	bool onSegment = pointLineOverlap(x,y,x2,y2, closestX,closestY);
 	if (!onSegment) return false;
 
-	distX = closestX - cx;
-	distY = closestY - cy;
-	float distance = sqrt( (distX*distX) + (distY*distY) );
-	if(distance < r){
+	float dist = distance(cx,cy,closestX,closestY);
+	if(dist <= r){
 		return true;
 	}
 	return false;
 }
 
 bool pointCircleOverlap(float x, float y, float cx, float cy, float r){
-	if(distance(x,y,cx,cy) < r){
+	if(distance(x,y,cx,cy) <= r){
 		return true;
 	}
 	return false;
@@ -570,7 +591,7 @@ bool pointLineOverlap(float x, float y, float x2, float y2, float px, float py) 
 
   float lineLen = distance(x,y, x2,y2);
 
-  float buffer = 10; 
+  float buffer = 15; 
   //if distances to points roughly equal line length
   if (distance1+distance2 >= lineLen-buffer && distance1+distance2 <= lineLen+buffer) {
     return true;
