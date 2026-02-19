@@ -191,9 +191,9 @@ int main( int argc, char **argv ){
 				cursors[i].x = data->ir.x;
 				cursors[i].y = data->ir.y;
 				cursors[i].connected = true;
-				cursors[i].pressedInputs = WPAD_ButtonsDown(0);
-				cursors[i].heldInputs = WPAD_ButtonsHeld(0);
-				cursors[i].releasedInputs = WPAD_ButtonsUp(0);
+				cursors[i].pressedInputs = WPAD_ButtonsDown(i);
+				cursors[i].heldInputs = WPAD_ButtonsHeld(i);
+				cursors[i].releasedInputs = WPAD_ButtonsUp(i);
 			}else{
 				cursors[i] = defaultCursor;
 			}
@@ -427,7 +427,7 @@ int main( int argc, char **argv ){
 		}
 		
 		//to make line count progress bar
-		drawLine(0, 0, ((double)lineCount/2500)*640, 0, 10, true);
+		//drawLine(0, 0, ((double)lineCount/2500)*640, 0, 10, true);
 			
 		GX_DrawDone();
 		
