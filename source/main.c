@@ -36,7 +36,7 @@ typedef struct {
 typedef struct {
 	float x,y,vx,vy,rot,rotv,size;
 	Cursor* parent;
-	bool active, grounded;
+	bool active, grounded, flipped;
 }Player;
 
 typedef struct {
@@ -52,6 +52,7 @@ bool lineCircleOverlap(float x, float y, float x2, float y2, float cx, float cy,
 bool pointCircleOverlap(float x, float y, float cx, float cy, float r);
 bool pointLineOverlap(float x, float y, float x2, float y2, float px, float py);
 float distance(float x, float y, float x2, float y2);
+int sideOfLine(float x, float y, float x2,float y2, float px, float py);
 
 //---------------------------------------------------------------------------------
 int main( int argc, char **argv ){
@@ -152,7 +153,8 @@ int main( int argc, char **argv ){
 	Cursor cursors[4];
 	Player players[4];
 	Cursor defaultCursor = {.x=1000,.y=100,.free=true,.connected=false,.item=0,.lastX=0,.lastY=0};
-	Player defaultPlayer = {.x=200,.y=200, .vx = 0, .vy = 0, .rot = 0, .rotv = 0, .size = 1.25, .active = false, .grounded = false};
+	Player defaultPlayer = {.x=200,.y=200, .vx = 0, .vy = 0, .rot = 0, .rotv = 0, .size = 1.33,
+		.active = false, .grounded = false, .flipped = false};
 	for (int i=0; i<=3; i++){
 		cursors[i] = defaultCursor;
 		players[i] = defaultPlayer;
@@ -165,8 +167,16 @@ int main( int argc, char **argv ){
 	float turnPower = 0.1;
 	float jumpPower = 1;
 	float airMovePower = 0.1;
+
+	float airFriction = .99;
+	float groundFriction = .965;
+	float surfaceAdherence = 0.5;
 	
-	bool screenWrap = false;
+
+	int arenaHorzSize = 600;
+	int arenaVertSize = 400;
+
+	bool screenWrap = true;
 	bool bottomAbyss = false;
 	
 	//object pools
@@ -179,6 +189,9 @@ int main( int argc, char **argv ){
 	//lines[0] = simpleLine;
 
 	int frameLooper = -1;
+
+	float debugA = 0;
+	float debugB = 0;
 
 	while(1) {
 		
@@ -222,6 +235,11 @@ int main( int argc, char **argv ){
 					players[i].active = true;
 					players[i].x = currCursor->x;
 					players[i].y = currCursor->y;
+				}
+
+				//disable player
+				if(currCursor->pressedInputs & WPAD_BUTTON_MINUS){
+					players[i].active = false;
 				}
 
 				//cursor add elements
@@ -291,35 +309,79 @@ int main( int argc, char **argv ){
 					//grav
 					currPlayer->vy += gravity;
 
+					//move
 					if(currPlayer->grounded){
 						if(cursors[i].heldInputs & WPAD_BUTTON_RIGHT){
 							currPlayer->vx += cosf(currPlayer->rot) * movePower;
 							currPlayer->vy += sinf(currPlayer->rot) * movePower;
+							currPlayer->flipped = false;
 						}
 						if(cursors[i].heldInputs & WPAD_BUTTON_LEFT){
 							currPlayer->vx -= cosf(currPlayer->rot) * movePower;
 							currPlayer->vy -= sinf(currPlayer->rot) * movePower;
+							currPlayer->flipped = true;
 						}
+						//jump
 						if(cursors[i].heldInputs & WPAD_BUTTON_UP){
 							currPlayer->vx += cosf(currPlayer->rot - M_PI/2) * jumpPower;
 							currPlayer->vy += sinf(currPlayer->rot - M_PI/2) * jumpPower;
 						}
+					//rotate
 					}else{
 						if(cursors[i].heldInputs & WPAD_BUTTON_RIGHT){
 							currPlayer->rot += turnPower;
 							currPlayer->vx += airMovePower;
+							currPlayer->flipped = false;
 						}
 						if(cursors[i].heldInputs & WPAD_BUTTON_LEFT){
 							currPlayer->rot -= turnPower;
 							currPlayer->vx -= airMovePower;
+							currPlayer->flipped = true;
 						}
 					}
 
+					//prevent rotation value from wrapping around to keep things simple
 					while(currPlayer->rot > M_PI){
 						currPlayer->rot -= 2*M_PI;
 					}
 					while(currPlayer->rot < -M_PI){
 						currPlayer->rot += 2*M_PI;
+					}
+
+					//bottom abyss
+					if(bottomAbyss){
+						if(currPlayer->y >= arenaVertSize){
+							players[i].active = false;
+						}
+					}
+
+					//screen wrap
+					if(screenWrap){
+						if(currPlayer->x < 0){
+							currPlayer->x = arenaHorzSize;
+						}
+						if(currPlayer->x > arenaHorzSize){
+							currPlayer->x = 0;
+						}
+						if(currPlayer->y < 0){
+							currPlayer->y = arenaVertSize;
+						}
+						if(currPlayer->y > arenaVertSize){
+							currPlayer->y = 0;
+						}
+					}else{//boundaries
+						if(currPlayer->x < 0){
+							currPlayer->x = 0;
+						}
+						if(currPlayer->x > arenaHorzSize){
+							currPlayer->x = arenaHorzSize;
+						}
+						if(currPlayer->y < 0){
+							currPlayer->y = 0;
+						}
+						if(currPlayer->y > arenaVertSize){
+							currPlayer->y = arenaVertSize;
+						}
 					}
 					
 
@@ -339,23 +401,32 @@ int main( int argc, char **argv ){
 							float groundAngle = 
 								atan2f( (lines[j].y-lines[j].y2), (lines[j].x-lines[j].x2) );
 
+							if(sideOfLine(lines[j].x,lines[j].y,lines[j].x2,lines[j].y2,currPlayer->x,currPlayer->y) > 0){
+								groundAngle = atan2f( (lines[j].y2-lines[j].y), (lines[j].x2-lines[j].x) );
+							}
 
-							if( abs(currPlayer->rot - groundAngle) < M_PI/3){
+
+							if( abs(currPlayer->rot - groundAngle) < M_PI/4){
 								currPlayer->grounded = true;
 								currPlayer->rot = groundAngle;
 							}
+
+							float groundPerpendicular = groundAngle - M_PI/2;
+
+							debugA = groundAngle;
+							debugB = groundPerpendicular;
 
 							//collision loop
 							int loopCount = 0;
 							while(
 								lineCircleOverlap(
-							lines[j].x, lines[j].y, lines[j].x2, lines[j].y2,
-							targetX, targetY, currPlayer->size * 8)
+									lines[j].x, lines[j].y, lines[j].x2, lines[j].y2,
+									targetX, targetY, currPlayer->size * 8)
 							){
 								targetX = currPlayer->x - currPlayer->vx;
 								targetY = currPlayer->y - currPlayer->vy;
-								currPlayer->vx += cosf(groundAngle - M_PI/2) * .1;
-								currPlayer->vy += sinf(groundAngle - M_PI/2) * .1;
+								currPlayer->vx += cosf(groundPerpendicular) * .1;
+								currPlayer->vy += sinf(groundPerpendicular) * .1;
 								targetX = currPlayer->x + currPlayer->vx;
 								targetY = currPlayer->y + currPlayer->vy;
 								
@@ -369,8 +440,11 @@ int main( int argc, char **argv ){
 								}
 							}
 
-							//targetX -= currPlayer->vx * .1;
-							//targetY -= currPlayer->vy * .1;
+							if((cursors[i].heldInputs & WPAD_BUTTON_UP) == false){
+								currPlayer->vx -= cosf(groundPerpendicular)*surfaceAdherence;
+								currPlayer->vy -= sinf(groundPerpendicular)*surfaceAdherence;
+							}
+							
 						}
 					}
 
@@ -378,11 +452,11 @@ int main( int argc, char **argv ){
 					currPlayer->y = targetY;
 
 					//friction
-					currPlayer->vx *= .99;
-					currPlayer->vy *= .99;
+					currPlayer->vx *= airFriction;
+					currPlayer->vy *= airFriction;
 					if(currPlayer->grounded){
-						currPlayer->vx *= .975;
-						currPlayer->vy *= .975;
+						currPlayer->vx *= groundFriction;
+						currPlayer->vy *= groundFriction;
 					}
 					
 
@@ -457,17 +531,23 @@ int main( int argc, char **argv ){
 				int frameOff = 0;
 
 				if((currCursor->heldInputs & WPAD_BUTTON_RIGHT) || (currCursor->heldInputs & WPAD_BUTTON_LEFT)){
-					if(frameLooper > 7 && frameLooper < 15 || frameLooper > 22){
+					if((frameLooper > 7 && frameLooper < 15) || frameLooper > 22){
 						frameOff = 2;
 					}
 				}
 
-				drawSquareSprite(4.1+frameOff, 0.1+i*2, 1.875, currPlayer->x,currPlayer->y,currPlayer->size,currPlayer->rot, false);
+				drawSquareSprite(4.1+frameOff, 0.1+i*2, 1.875, currPlayer->x,currPlayer->y,currPlayer->size,currPlayer->rot, currPlayer->flipped);
 			}
 		}
 		
-		//the value bar (cause I can't get printf to work without inducing seziures)
-		drawLine(0, 0, frameLooper*3, 0, 10, true);
+		//debug bars
+		//drawLine(0, 0, debugA*30, 0, 10, true);
+		//drawLine(100, 100, 100+cosf(debugA)*50, 100+sinf(debugA)*50, 10, false);
+		//drawLine(100, 100, 100+cosf(debugB)*50, 100+sinf(debugB)*50, 10, true);
+
+		//area borders
+		drawLine(arenaHorzSize,0,arenaHorzSize,600,3,true);
+		drawLine(0,arenaVertSize,800,arenaVertSize,3,true);
 			
 		GX_DrawDone();
 		
@@ -494,25 +574,27 @@ int main( int argc, char **argv ){
 void drawSquareSprite(float tx, float ty, float tscale, float x, float y, float scale, float rot, bool flip) {
 //---------------------------------------------------------------------------------
 	
-	float flipVal = 1;
-	if(flip){
-		flipVal = -1;
-	}
 
 	float tleft = (tx*16)/TEXTURE_SIZE;
 	float ttop = (ty*16)/TEXTURE_SIZE;
 	float tlength = (tscale*16)/TEXTURE_SIZE;
+	float theight = (tscale*16)/TEXTURE_SIZE;
 	float drawscale = tscale*16*scale*0.5;
+
+	if(flip){
+		tleft += tlength;
+		tlength *= -1;
+	}
 	
 	GX_Begin(GX_QUADS, GX_VTXFMT0, 4);			// Draw A Quad
-		GX_Position2f32(x-cosf(rot+M_PI/4)*drawscale*flipVal, y-sinf(rot+M_PI/4)*drawscale);			// Top Left
+		GX_Position2f32(x-cosf(rot+M_PI/4)*drawscale, y-sinf(rot+M_PI/4)*drawscale);			// Top Left
 		GX_TexCoord2f32(tleft,ttop);
-		GX_Position2f32(x-cosf(rot+3*(M_PI/4))*drawscale*flipVal, y-sinf(rot+3*(M_PI/4))*drawscale);	// Top Right
+		GX_Position2f32(x-cosf(rot+3*(M_PI/4))*drawscale, y-sinf(rot+3*(M_PI/4))*drawscale);	// Top Right
 		GX_TexCoord2f32(tleft+tlength,ttop);
-		GX_Position2f32(x-cosf(rot+5*(M_PI/4))*drawscale*flipVal, y-sinf(rot+5*(M_PI/4))*drawscale);	// Bottom Right
-		GX_TexCoord2f32(tleft+tlength,ttop+tlength);
-		GX_Position2f32(x-cosf(rot-M_PI/4)*drawscale*flipVal, y-sinf(rot-M_PI/4)*drawscale);			// Bottom Left
-		GX_TexCoord2f32(tleft,ttop+tlength);
+		GX_Position2f32(x-cosf(rot+5*(M_PI/4))*drawscale, y-sinf(rot+5*(M_PI/4))*drawscale);	// Bottom Right
+		GX_TexCoord2f32(tleft+tlength,ttop+theight);
+		GX_Position2f32(x-cosf(rot-M_PI/4)*drawscale, y-sinf(rot-M_PI/4)*drawscale);			// Bottom Left
+		GX_TexCoord2f32(tleft,ttop+theight);
 	GX_End();									// Done Drawing The Quad
 
 }
@@ -601,4 +683,12 @@ bool pointLineOverlap(float x, float y, float x2, float y2, float px, float py) 
 
 float distance(float x, float y, float x2, float y2){
 	return sqrtf( (x-x2)*(x-x2) + (y-y2)*(y-y2));
+}
+
+int sideOfLine(float x, float y, float x2,float y2, float px, float py) {
+  if( (x2 - x)*(py - y) - (y2 - y)*(px - x) > 0){//apparently this is a corss product
+	return -1;
+  }else{
+	return 1;
+  }
 }
