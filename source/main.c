@@ -1,9 +1,3 @@
-/*---------------------------------------------------------------------------------
-
-	Simple demonstration of sprites using textured quads
-
----------------------------------------------------------------------------------*/
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -93,7 +87,7 @@ int main( int argc, char **argv ){
 	GX_Init(gp_fifo,DEFAULT_FIFO_SIZE);
 
 	// clears the bg to color and clears the z buffer
-	GX_SetCopyClear(background, 0x00ffffff);
+	GX_SetCopyClear(background, 0x00fffff);
 
 	// other gx setup
 	GX_SetViewport(0,0,rmode->fbWidth,rmode->efbHeight,0,1);
@@ -184,9 +178,9 @@ int main( int argc, char **argv ){
 	Line bgLines[2500];
 	int lineCount = 0;
 	Line lines[2500];
-	//lineCount++;
-	//Line simpleLine = {.x = 10, .y = 10, .x2 = 100, .y2 = 100};
-	//lines[0] = simpleLine;
+	lineCount++;
+	Line simpleLine = {.x = 100, .y = 200, .x2 = 400, .y2 = 200};
+	lines[0] = simpleLine;
 
 	int frameLooper = -1;
 
@@ -256,7 +250,7 @@ int main( int argc, char **argv ){
 				if(currCursor->heldInputs & WPAD_BUTTON_B){
 					for(int j = 0; j < lineCount; j++){
 						Line* currLine = &lines[j];
-						if(lineCircleOverlap(currLine->x,currLine->y,currLine->x2,currLine->y2,currCursor->x,currCursor->y,2)  ){
+						if(lineCircleOverlap(currLine->x,currLine->y,currLine->x2,currLine->y2,currCursor->x,currCursor->y, 4)  ){
 							for(int k = j+1; k < lineCount; k++){
 								lines[k-1] = lines[k];
 							}
@@ -383,7 +377,6 @@ int main( int argc, char **argv ){
 							currPlayer->y = arenaVertSize;
 						}
 					}
-					
 
 					//apply velocity for target pos
 					int targetX = currPlayer->x + currPlayer->vx;
@@ -406,15 +399,17 @@ int main( int argc, char **argv ){
 							}
 
 
-							if( abs(currPlayer->rot - groundAngle) < M_PI/4){
+							if( fabsf(currPlayer->rot - groundAngle) < M_PI/4){
 								currPlayer->grounded = true;
 								currPlayer->rot = groundAngle;
 							}
 
 							float groundPerpendicular = groundAngle - M_PI/2;
 
-							debugA = groundAngle;
-							debugB = groundPerpendicular;
+							//debugA = groundAngle;
+							//debugB = groundPerpendicular;
+
+							debugA = currPlayer->vx;
 
 							//collision loop
 							int loopCount = 0;
@@ -425,8 +420,8 @@ int main( int argc, char **argv ){
 							){
 								targetX = currPlayer->x - currPlayer->vx;
 								targetY = currPlayer->y - currPlayer->vy;
-								currPlayer->vx += cosf(groundPerpendicular) * .1;
-								currPlayer->vy += sinf(groundPerpendicular) * .1;
+								currPlayer->vx += cosf(groundPerpendicular) * .1f;
+								currPlayer->vy += sinf(groundPerpendicular) * .1f;
 								targetX = currPlayer->x + currPlayer->vx;
 								targetY = currPlayer->y + currPlayer->vy;
 								
@@ -439,6 +434,8 @@ int main( int argc, char **argv ){
 									break;
 								}
 							}
+
+							debugB = currPlayer->vx;
 
 							if((cursors[i].heldInputs & WPAD_BUTTON_UP) == false){
 								currPlayer->vx -= cosf(groundPerpendicular)*surfaceAdherence;
@@ -489,7 +486,7 @@ int main( int argc, char **argv ){
 		GX_SetVtxDesc(GX_VA_TEX0, GX_DIRECT);
 
 		guMtxIdentity(GXmodelView2D);
-		guMtxTransApply (GXmodelView2D, GXmodelView2D, 0.0F, 0.0F, -5.0F);
+		guMtxTransApply (GXmodelView2D, GXmodelView2D, 0.0, 0.0, -5.0);
 		GX_LoadPosMtxImm(GXmodelView2D,GX_PNMTX0);
 		
 		//background giant sprite
@@ -541,7 +538,7 @@ int main( int argc, char **argv ){
 		}
 		
 		//debug bars
-		//drawLine(0, 0, debugA*30, 0, 10, true);
+		drawLine(0, 1, fabsf(players[0].vx)*100, 1, 10, true);
 		//drawLine(100, 100, 100+cosf(debugA)*50, 100+sinf(debugA)*50, 10, false);
 		//drawLine(100, 100, 100+cosf(debugB)*50, 100+sinf(debugB)*50, 10, true);
 
@@ -669,11 +666,11 @@ bool pointLineOverlap(float x, float y, float x2, float y2, float px, float py) 
 
   //distance
   float distance1 = distance(px,py, x,y);
-  float distance2 = distance(px,py, x,y);
+  float distance2 = distance(px,py, x2,y2);
 
   float lineLen = distance(x,y, x2,y2);
 
-  float buffer = 15; 
+  float buffer = 0.1; 
   //if distances to points roughly equal line length
   if (distance1+distance2 >= lineLen-buffer && distance1+distance2 <= lineLen+buffer) {
     return true;
